@@ -185,6 +185,111 @@ static void add_motion_box(MotionDetector *detector,
     detector->motion_bottom = detector->motion_box_bottom[0];
 }
 
+static int boxes_are_close(const MotionDetector *detector, int a, int b)
+{
+    const int merge_gap = 2;
+
+    return detector->motion_box_left[a] <= detector->motion_box_right[b] + merge_gap &&
+           detector->motion_box_right[a] + merge_gap >= detector->motion_box_left[b] &&
+           detector->motion_box_top[a] <= detector->motion_box_bottom[b] + merge_gap &&
+           detector->motion_box_bottom[a] + merge_gap >= detector->motion_box_top[b];
+}
+
+static void remove_motion_box(MotionDetector *detector, int index)
+{
+    for (int i = index; i + 1 < detector->motion_box_count; ++i) {
+        detector->motion_box_left[i] = detector->motion_box_left[i + 1];
+        detector->motion_box_top[i] = detector->motion_box_top[i + 1];
+        detector->motion_box_right[i] = detector->motion_box_right[i + 1];
+        detector->motion_box_bottom[i] = detector->motion_box_bottom[i + 1];
+        detector->motion_box_area[i] = detector->motion_box_area[i + 1];
+    }
+
+    if (detector->motion_box_count > 0) {
+        --detector->motion_box_count;
+    }
+}
+
+static void sort_motion_boxes(MotionDetector *detector)
+{
+    for (int i = 0; i < detector->motion_box_count; ++i) {
+        int best = i;
+        for (int j = i + 1; j < detector->motion_box_count; ++j) {
+            if (detector->motion_box_area[j] > detector->motion_box_area[best]) {
+                best = j;
+            }
+        }
+
+        if (best != i) {
+            const int left = detector->motion_box_left[i];
+            const int top = detector->motion_box_top[i];
+            const int right = detector->motion_box_right[i];
+            const int bottom = detector->motion_box_bottom[i];
+            const int area = detector->motion_box_area[i];
+
+            detector->motion_box_left[i] = detector->motion_box_left[best];
+            detector->motion_box_top[i] = detector->motion_box_top[best];
+            detector->motion_box_right[i] = detector->motion_box_right[best];
+            detector->motion_box_bottom[i] = detector->motion_box_bottom[best];
+            detector->motion_box_area[i] = detector->motion_box_area[best];
+
+            detector->motion_box_left[best] = left;
+            detector->motion_box_top[best] = top;
+            detector->motion_box_right[best] = right;
+            detector->motion_box_bottom[best] = bottom;
+            detector->motion_box_area[best] = area;
+        }
+    }
+}
+
+static void finalize_motion_boxes(MotionDetector *detector)
+{
+    int merged = 1;
+    while (merged) {
+        merged = 0;
+
+        for (int i = 0; i < detector->motion_box_count && !merged; ++i) {
+            for (int j = i + 1; j < detector->motion_box_count; ++j) {
+                if (!boxes_are_close(detector, i, j)) {
+                    continue;
+                }
+
+                if (detector->motion_box_left[j] < detector->motion_box_left[i]) {
+                    detector->motion_box_left[i] = detector->motion_box_left[j];
+                }
+                if (detector->motion_box_top[j] < detector->motion_box_top[i]) {
+                    detector->motion_box_top[i] = detector->motion_box_top[j];
+                }
+                if (detector->motion_box_right[j] > detector->motion_box_right[i]) {
+                    detector->motion_box_right[i] = detector->motion_box_right[j];
+                }
+                if (detector->motion_box_bottom[j] > detector->motion_box_bottom[i]) {
+                    detector->motion_box_bottom[i] = detector->motion_box_bottom[j];
+                }
+
+                detector->motion_box_area[i] += detector->motion_box_area[j];
+                remove_motion_box(detector, j);
+                merged = 1;
+                break;
+            }
+        }
+    }
+
+    sort_motion_boxes(detector);
+
+    if (detector->motion_box_count > 0) {
+        detector->motion_left = detector->motion_box_left[0];
+        detector->motion_top = detector->motion_box_top[0];
+        detector->motion_right = detector->motion_box_right[0];
+        detector->motion_bottom = detector->motion_box_bottom[0];
+    } else {
+        detector->motion_left = 0;
+        detector->motion_top = 0;
+        detector->motion_right = 0;
+        detector->motion_bottom = 0;
+    }
+}
+
 static void update_raw_motion_bounds(MotionDetector *detector)
 {
     const int width = detector->width;
@@ -258,6 +363,8 @@ static void update_raw_motion_bounds(MotionDetector *detector)
 
         add_motion_box(detector, count, min_x, min_y, max_x, max_y);
     }
+
+    finalize_motion_boxes(detector);
 }
 
 WASM_EXPORT
