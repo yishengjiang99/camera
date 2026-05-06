@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WASM Camera Motion Detector</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="stage" aria-label="Camera motion detector">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="overlay"></canvas>
+        <div class="status" id="status">Loading WASM...</div>
+      </section>
+
+      <aside class="panel">
+        <div>
+          <h1>Motion Detector</h1>
+          <p>Camera frames are downscaled, copied once into WASM memory, and scored by the C motion detector.</p>
+        </div>
+
+        <div class="meter" aria-label="Motion level">
+          <div id="bar"></div>
+        </div>
+
+        <dl class="stats">
+          <div>
+            <dt>State</dt>
+            <dd id="state">Idle</dd>
+          </div>
+          <div>
+            <dt>Score</dt>
+            <dd id="score">0.0000</dd>
+          </div>
+          <div>
+            <dt>Changed</dt>
+            <dd id="changed">0%</dd>
+          </div>
+          <div>
+            <dt>Frames</dt>
+            <dd id="frames">0</dd>
+          </div>
+          <div>
+            <dt>Hum</dt>
+            <dd id="hum">0%</dd>
+          </div>
+        </dl>
+
+        <label class="threshold">
+          <span>Threshold</span>
+          <input id="threshold" type="range" min="0.02" max="0.2" step="0.005" value="0.08" />
+        </label>
+
+        <button id="toggle" type="button" disabled>Start Camera</button>
+      </aside>
+    </main>
+
+    <canvas id="sample" width="32" height="18" hidden></canvas>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
