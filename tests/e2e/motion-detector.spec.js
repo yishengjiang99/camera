@@ -21,6 +21,7 @@ test("loads WASM and processes fake camera frames", async ({ page }) => {
 
   await expect(page.locator("#toggle")).toHaveText("Stop Camera");
   await expect(page.locator("#state")).not.toHaveText("Idle");
+  await expect(page.locator("#hum")).toContainText("%");
 
   await expect
     .poll(async () => Number(await page.locator("#frames").textContent()), {

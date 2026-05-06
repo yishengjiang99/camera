@@ -11,12 +11,14 @@ const stateEl = document.querySelector("#state");
 const scoreEl = document.querySelector("#score");
 const changedEl = document.querySelector("#changed");
 const framesEl = document.querySelector("#frames");
+const humEl = document.querySelector("#hum");
 const barEl = document.querySelector("#bar");
 const toggle = document.querySelector("#toggle");
 const threshold = document.querySelector("#threshold");
 
 const overlayCtx = overlay.getContext("2d");
 const sampleCtx = sample.getContext("2d", { willReadFrequently: true });
+const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
 let wasm = null;
 let detector = 0;
@@ -31,6 +33,14 @@ let demoCanvas = null;
 let demoCtx = null;
 let demoAnimationId = 0;
 let demoStartTime = 0;
+let audioContext = null;
+let humOscillator = null;
+let humGain = null;
+let humFilter = null;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function cameraSupported() {
   return Boolean(
@@ -119,6 +129,60 @@ function setStatus(text) {
   statusEl.textContent = text;
 }
 
+async function ensureHumAudio() {
+  if (!AudioContextClass) {
+    return;
+  }
+
+  if (!audioContext) {
+    audioContext = new AudioContextClass();
+    humOscillator = audioContext.createOscillator();
+    humFilter = audioContext.createBiquadFilter();
+    humGain = audioContext.createGain();
+
+    humOscillator.type = "sine";
+    humOscillator.frequency.value = 72;
+    humFilter.type = "lowpass";
+    humFilter.frequency.value = 180;
+    humFilter.Q.value = 0.65;
+    humGain.gain.value = 0;
+
+    humOscillator.connect(humFilter);
+    humFilter.connect(humGain);
+    humGain.connect(audioContext.destination);
+    humOscillator.start();
+  }
+
+  if (audioContext.state === "suspended") {
+    await audioContext.resume();
+  }
+}
+
+function setHumLevel(motion, level) {
+  const target = motion ? clamp(0.015 + level * 0.55, 0, 0.18) : 0;
+
+  if (humEl) {
+    humEl.textContent = `${Math.round((target / 0.18) * 100)}%`;
+  }
+
+  if (!humGain || !audioContext) {
+    return;
+  }
+
+  const now = audioContext.currentTime;
+
+  humGain.gain.cancelScheduledValues(now);
+  humGain.gain.setTargetAtTime(target, now, motion ? 0.055 : 0.16);
+
+  if (humOscillator) {
+    humOscillator.frequency.setTargetAtTime(72 + clamp(level * 90, 0, 55), now, 0.08);
+  }
+}
+
+function muteHum() {
+  setHumLevel(false, 0);
+}
+
 function resizeOverlay() {
   const rect = video.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -173,6 +237,7 @@ function updateStats(result) {
   barEl.style.width = `${Math.min(100, level * 100)}%`;
   setStatus(motion ? `Motion: ${changedPixels} changed pixels` : "Monitoring");
   drawOverlay(motion, level, box);
+  setHumLevel(motion, level);
 }
 
 function processFrame() {
@@ -191,6 +256,7 @@ function processFrame() {
   if (result < 0) {
     setStatus(`WASM error ${result}`);
     running = false;
+    muteHum();
   } else {
     updateStats(result);
   }
@@ -219,6 +285,7 @@ function scheduleFrame() {
 async function startCamera() {
   toggle.disabled = true;
   setStatus("Requesting camera...");
+  await ensureHumAudio();
 
   if (!cameraSupported()) {
     throw new Error(cameraSupportMessage());
@@ -295,8 +362,12 @@ function stopCamera() {
   video.srcObject = null;
   document.body.classList.remove("motion");
   drawOverlay(false, 0);
+  muteHum();
   setStatus("Stopped");
   stateEl.textContent = "Idle";
+  if (humEl) {
+    humEl.textContent = "0%";
+  }
   toggle.textContent = "Start Camera";
 }
 
