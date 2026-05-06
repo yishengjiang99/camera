@@ -1,0 +1,5 @@
+node_modules
+csa_example
+csa_tests
+*.o
+.DS_Store

@@ -1,0 +1,14 @@
+{
+  "name": "camera",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build:wasm": "make docker-wasm",
+    "serve": "python3 -m http.server 8080 --directory web",
+    "test": "make test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
