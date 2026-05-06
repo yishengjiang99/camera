@@ -146,9 +146,9 @@ button:disabled {
 }
 
 .motion .status {
-  color: #210707;
-  background: #ffdfdf;
-  border-color: #ff8585;
+  color: #04110a;
+  background: #b9ffd4;
+  border-color: #65ffa6;
 }
 
 @media (max-width: 820px) {

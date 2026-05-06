@@ -229,10 +229,15 @@ function drawOverlay(motion, level, boxes = []) {
     const y = Math.max(0, box.top * yScale - pad);
     const rectWidth = Math.min(width - x, (box.right - box.left + 1) * xScale + pad * 2);
     const rectHeight = Math.min(height - y, (box.bottom - box.top + 1) * yScale + pad * 2);
-    const alpha = index === 0 ? Math.min(0.95, 0.35 + level * 4) : 0.58;
+    const alpha = index === 0 ? Math.min(0.98, 0.48 + level * 3.5) : 0.72;
+    const lineWidth = index === 0 ? 4 : 3;
 
-    overlayCtx.lineWidth = index === 0 ? 4 : 3;
-    overlayCtx.strokeStyle = `rgba(255, 93, 93, ${alpha})`;
+    overlayCtx.lineWidth = lineWidth + 3;
+    overlayCtx.strokeStyle = "rgba(4, 12, 9, 0.82)";
+    overlayCtx.strokeRect(x, y, rectWidth, rectHeight);
+
+    overlayCtx.lineWidth = lineWidth;
+    overlayCtx.strokeStyle = `rgba(101, 255, 166, ${alpha})`;
     overlayCtx.strokeRect(x, y, rectWidth, rectHeight);
   });
 }
