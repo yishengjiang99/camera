@@ -2,7 +2,7 @@ CC ?= cc
 CFLAGS ?= -std=c99 -O2 -Wall -Wextra -pedantic
 LDFLAGS ?= -lm
 EMCC ?= emcc
-WASM_EXPORTS := "_md_create","_md_destroy","_md_frame_ptr","_md_frame_bytes","_md_process_rgba","_md_set_threshold","_md_score","_md_level","_md_changed_pixels"
+WASM_EXPORTS := "_md_create","_md_destroy","_md_frame_ptr","_md_frame_bytes","_md_process_rgba","_md_set_threshold","_md_score","_md_level","_md_changed_pixels","_md_motion_left","_md_motion_top","_md_motion_right","_md_motion_bottom"
 BUILD_DIR := build
 SRC_DIR := src
 OBJ_DIR := $(BUILD_DIR)/obj

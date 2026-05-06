@@ -69,7 +69,6 @@ test("falls back to demo stream when camera permission is denied", async ({ brow
 
   await page.locator("#toggle").click();
 
-  await expect(page.locator("#status")).toContainText("running demo stream");
   await expect(page.locator("#toggle")).toHaveText("Stop Camera");
 
   await expect

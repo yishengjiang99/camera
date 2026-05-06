@@ -21,6 +21,10 @@ typedef struct MotionDetector {
     float score;
     float level;
     int changed_pixels;
+    int motion_left;
+    int motion_top;
+    int motion_right;
+    int motion_bottom;
 
     unsigned char *rgba;
     float *input;
@@ -180,11 +184,19 @@ int md_process_rgba(void *handle)
         detector->score = 0.0f;
         detector->level = 0.0f;
         detector->changed_pixels = 0;
+        detector->motion_left = 0;
+        detector->motion_top = 0;
+        detector->motion_right = 0;
+        detector->motion_bottom = 0;
         return 0;
     }
 
     float sum = 0.0f;
     int changed = 0;
+    int min_x = detector->width;
+    int min_y = detector->height;
+    int max_x = -1;
+    int max_y = -1;
     for (int i = 0; i < detector->pixels; ++i) {
         float diff = detector->features[i] - detector->previous[i];
         if (diff < 0.0f) {
@@ -193,6 +205,22 @@ int md_process_rgba(void *handle)
 
         sum += diff;
         if (diff > detector->threshold) {
+            const int x = i % detector->width;
+            const int y = i / detector->width;
+
+            if (x < min_x) {
+                min_x = x;
+            }
+            if (y < min_y) {
+                min_y = y;
+            }
+            if (x > max_x) {
+                max_x = x;
+            }
+            if (y > max_y) {
+                max_y = y;
+            }
+
             ++changed;
         }
 
@@ -202,6 +230,10 @@ int md_process_rgba(void *handle)
     detector->score = sum / (float)detector->pixels;
     detector->changed_pixels = changed;
     detector->level = (float)changed / (float)detector->pixels;
+    detector->motion_left = changed > 0 ? min_x : 0;
+    detector->motion_top = changed > 0 ? min_y : 0;
+    detector->motion_right = changed > 0 ? max_x : 0;
+    detector->motion_bottom = changed > 0 ? max_y : 0;
 
     return changed > detector->pixels / 25 ? 1 : 0;
 }
@@ -234,4 +266,32 @@ int md_changed_pixels(void *handle)
 {
     MotionDetector *detector = (MotionDetector *)handle;
     return detector ? detector->changed_pixels : 0;
+}
+
+WASM_EXPORT
+int md_motion_left(void *handle)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    return detector ? detector->motion_left : 0;
+}
+
+WASM_EXPORT
+int md_motion_top(void *handle)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    return detector ? detector->motion_top : 0;
+}
+
+WASM_EXPORT
+int md_motion_right(void *handle)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    return detector ? detector->motion_right : 0;
+}
+
+WASM_EXPORT
+int md_motion_bottom(void *handle)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    return detector ? detector->motion_bottom : 0;
 }

@@ -14,6 +14,10 @@ void md_set_threshold(void *handle, float threshold);
 float md_score(void *handle);
 float md_level(void *handle);
 int md_changed_pixels(void *handle);
+int md_motion_left(void *handle);
+int md_motion_top(void *handle);
+int md_motion_right(void *handle);
+int md_motion_bottom(void *handle);
 
 #ifdef __cplusplus
 }

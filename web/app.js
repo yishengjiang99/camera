@@ -127,18 +127,35 @@ function resizeOverlay() {
   overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
-function drawOverlay(motion, level) {
+function motionBox() {
+  return {
+    left: wasm._md_motion_left(detector),
+    top: wasm._md_motion_top(detector),
+    right: wasm._md_motion_right(detector),
+    bottom: wasm._md_motion_bottom(detector),
+  };
+}
+
+function drawOverlay(motion, level, box = null) {
   const width = overlay.clientWidth;
   const height = overlay.clientHeight;
   overlayCtx.clearRect(0, 0, width, height);
 
-  if (!motion) {
+  if (!motion || !box || box.right < box.left || box.bottom < box.top) {
     return;
   }
 
+  const pad = 12;
+  const xScale = width / ANALYSIS_WIDTH;
+  const yScale = height / ANALYSIS_HEIGHT;
+  const x = Math.max(0, box.left * xScale - pad);
+  const y = Math.max(0, box.top * yScale - pad);
+  const rectWidth = Math.min(width - x, (box.right - box.left + 1) * xScale + pad * 2);
+  const rectHeight = Math.min(height - y, (box.bottom - box.top + 1) * yScale + pad * 2);
+
   overlayCtx.lineWidth = 4;
   overlayCtx.strokeStyle = `rgba(255, 93, 93, ${Math.min(0.95, 0.35 + level * 4)})`;
-  overlayCtx.strokeRect(10, 10, width - 20, height - 20);
+  overlayCtx.strokeRect(x, y, rectWidth, rectHeight);
 }
 
 function updateStats(result) {
@@ -146,6 +163,7 @@ function updateStats(result) {
   const level = wasm._md_level(detector);
   const changedPixels = wasm._md_changed_pixels(detector);
   const motion = result === 1;
+  const box = motion ? motionBox() : null;
 
   document.body.classList.toggle("motion", motion);
   stateEl.textContent = motion ? "Motion" : "Still";
@@ -154,7 +172,7 @@ function updateStats(result) {
   framesEl.textContent = String(frames);
   barEl.style.width = `${Math.min(100, level * 100)}%`;
   setStatus(motion ? `Motion: ${changedPixels} changed pixels` : "Monitoring");
-  drawOverlay(motion, level);
+  drawOverlay(motion, level, box);
 }
 
 function processFrame() {
