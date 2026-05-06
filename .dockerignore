@@ -1,4 +1,5 @@
 node_modules
+build
 csa_example
 csa_tests
 *.o

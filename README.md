@@ -19,12 +19,22 @@ make wasm
 
 Both commands generate:
 
-- `web/motion_wasm.js`
-- `web/motion_wasm.wasm`
+- `build/web/motion_wasm.js`
+- `build/web/motion_wasm.wasm`
+
+To create the full static site:
+
+```sh
+make docker-site
+```
+
+This copies the handwritten files from `web` and places all generated output in
+`build/web`.
 
 ## Run
 
 ```sh
+npm run build
 npm run serve
 ```
 
@@ -35,7 +45,7 @@ one C function per media frame.
 ## Deploy
 
 The GitHub project uses a `gh-pages` branch for static hosting. Build the
-WebAssembly bundle, then publish the contents of `web` to that branch.
+static site, then publish the contents of `build/web` to that branch.
 
 Camera access requires a secure origin, so use the GitHub Pages `https://`
 URL for the hosted demo.

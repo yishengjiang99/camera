@@ -1,7 +1,6 @@
 csa_example
 csa_tests
 *.o
-web/motion_wasm.js
-web/motion_wasm.wasm
+build/
 .DS_Store
 node_modules

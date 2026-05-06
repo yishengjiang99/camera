@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "make docker-site",
     "build:wasm": "make docker-wasm",
-    "serve": "python3 -m http.server 8080 --directory web",
+    "serve": "python3 -m http.server 8080 --directory build/web",
     "test": "make test"
   },
   "keywords": [],
