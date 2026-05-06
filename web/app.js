@@ -158,11 +158,11 @@ async function ensureHumAudio() {
   }
 }
 
-function setHumLevel(motion, level) {
-  const target = motion ? clamp(0.015 + level * 0.55, 0, 0.18) : 0;
+function setHumLevel(active, level) {
+  const target = active ? clamp(0.02 + level * 0.7, 0, 0.22) : 0;
 
   if (humEl) {
-    humEl.textContent = `${Math.round((target / 0.18) * 100)}%`;
+    humEl.textContent = `${Math.round((target / 0.22) * 100)}%`;
   }
 
   if (!humGain || !audioContext) {
@@ -172,7 +172,7 @@ function setHumLevel(motion, level) {
   const now = audioContext.currentTime;
 
   humGain.gain.cancelScheduledValues(now);
-  humGain.gain.setTargetAtTime(target, now, motion ? 0.055 : 0.16);
+  humGain.gain.setTargetAtTime(target, now, active ? 0.055 : 0.16);
 
   if (humOscillator) {
     humOscillator.frequency.setTargetAtTime(72 + clamp(level * 90, 0, 55), now, 0.08);
@@ -242,6 +242,7 @@ function updateStats(result) {
   const level = wasm._md_level(detector);
   const changedPixels = wasm._md_changed_pixels(detector);
   const motion = result === 1;
+  const humActive = level >= 0.01 || changedPixels > 0;
   const boxes = motion ? motionBoxes() : [];
 
   document.body.classList.toggle("motion", motion);
@@ -252,7 +253,7 @@ function updateStats(result) {
   barEl.style.width = `${Math.min(100, level * 100)}%`;
   setStatus(motion ? `Motion: ${changedPixels} changed pixels` : "Monitoring");
   drawOverlay(motion, level, boxes);
-  setHumLevel(motion, level);
+  setHumLevel(humActive, level);
 }
 
 function processFrame() {
