@@ -52,6 +52,42 @@
           <input id="threshold" type="range" min="0.02" max="0.2" step="0.005" value="0.08" />
         </label>
 
+        <section class="controls" aria-label="Detector tuning">
+          <label>
+            <span>Resolution <output id="resolutionValue">32 x 18</output></span>
+            <select id="resolution">
+              <option value="32x18" selected>32 x 18</option>
+              <option value="48x27">48 x 27</option>
+              <option value="64x36">64 x 36</option>
+              <option value="80x45">80 x 45</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Merge <output id="mergeValue">2</output></span>
+            <input id="mergeGap" type="range" min="0" max="6" step="1" value="2" />
+          </label>
+
+          <label>
+            <span>Min Blob <output id="blobValue">2</output></span>
+            <input id="minBlob" type="range" min="1" max="16" step="1" value="2" />
+          </label>
+
+          <label>
+            <span>Boxes <output id="boxesValue">6</output></span>
+            <input id="maxBoxes" type="range" min="1" max="6" step="1" value="6" />
+          </label>
+
+          <label>
+            <span>Audio <output id="audioValue">100%</output></span>
+            <input id="audioSensitivity" type="range" min="0" max="2" step="0.05" value="1" />
+          </label>
+        </section>
+
+        <figure class="debug">
+          <canvas id="debugFrame" width="32" height="18"></canvas>
+        </figure>
+
         <button id="toggle" type="button" disabled>Start Camera</button>
       </aside>
     </main>

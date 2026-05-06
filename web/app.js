@@ -1,7 +1,7 @@
 import createMotionModule from "./motion_wasm.js";
 
-const ANALYSIS_WIDTH = 32;
-const ANALYSIS_HEIGHT = 18;
+let analysisWidth = 32;
+let analysisHeight = 18;
 
 const video = document.querySelector("#video");
 const overlay = document.querySelector("#overlay");
@@ -15,9 +15,21 @@ const humEl = document.querySelector("#hum");
 const barEl = document.querySelector("#bar");
 const toggle = document.querySelector("#toggle");
 const threshold = document.querySelector("#threshold");
+const resolution = document.querySelector("#resolution");
+const resolutionValue = document.querySelector("#resolutionValue");
+const mergeGap = document.querySelector("#mergeGap");
+const mergeValue = document.querySelector("#mergeValue");
+const minBlob = document.querySelector("#minBlob");
+const blobValue = document.querySelector("#blobValue");
+const maxBoxes = document.querySelector("#maxBoxes");
+const boxesValue = document.querySelector("#boxesValue");
+const audioSensitivity = document.querySelector("#audioSensitivity");
+const audioValue = document.querySelector("#audioValue");
+const debugFrame = document.querySelector("#debugFrame");
 
 const overlayCtx = overlay.getContext("2d");
 const sampleCtx = sample.getContext("2d", { willReadFrequently: true });
+const debugCtx = debugFrame.getContext("2d");
 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
 
 let wasm = null;
@@ -37,6 +49,10 @@ let audioContext = null;
 let humOscillator = null;
 let humGain = null;
 let humFilter = null;
+let mergeGapValue = Number(mergeGap.value);
+let minBlobValue = Number(minBlob.value);
+let maxBoxesValue = Number(maxBoxes.value);
+let audioSensitivityValue = Number(audioSensitivity.value);
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -159,7 +175,7 @@ async function ensureHumAudio() {
 }
 
 function setHumLevel(active, level) {
-  const target = active ? clamp(0.02 + level * 0.7, 0, 0.22) : 0;
+  const target = active ? clamp((0.02 + level * 0.7) * audioSensitivityValue, 0, 0.22) : 0;
 
   if (humEl) {
     humEl.textContent = `${Math.round((target / 0.22) * 100)}%`;
@@ -191,8 +207,55 @@ function resizeOverlay() {
   overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
+function updateControlLabels() {
+  resolutionValue.textContent = `${analysisWidth} x ${analysisHeight}`;
+  mergeValue.textContent = String(mergeGapValue);
+  blobValue.textContent = String(minBlobValue);
+  boxesValue.textContent = String(maxBoxesValue);
+  audioValue.textContent = `${Math.round(audioSensitivityValue * 100)}%`;
+}
+
+function applyDetectorOptions() {
+  if (!detector) {
+    return;
+  }
+
+  wasm._md_set_threshold(detector, thresholdValue);
+  wasm._md_set_box_options(detector, minBlobValue, mergeGapValue, maxBoxesValue);
+}
+
+function setAnalysisResolution(value) {
+  const [width, height] = value.split("x").map(Number);
+  analysisWidth = width;
+  analysisHeight = height;
+  sample.width = analysisWidth;
+  sample.height = analysisHeight;
+  debugFrame.width = analysisWidth;
+  debugFrame.height = analysisHeight;
+  updateControlLabels();
+}
+
+function createDetector() {
+  if (detector) {
+    wasm._md_destroy(detector);
+    detector = 0;
+  }
+
+  detector = wasm._md_create(analysisWidth, analysisHeight, thresholdValue);
+  if (!detector) {
+    throw new Error("Could not create WASM motion detector");
+  }
+
+  applyDetectorOptions();
+  framePtr = wasm._md_frame_ptr(detector);
+  frameBytes = wasm._md_frame_bytes(detector);
+  if (!framePtr || frameBytes !== analysisWidth * analysisHeight * 4) {
+    throw new Error("Unexpected WASM frame buffer");
+  }
+}
+
 function motionBoxes() {
-  const count = Math.min(6, wasm._md_motion_box_count(detector));
+  const count = Math.min(maxBoxesValue, wasm._md_motion_box_count(detector));
   const boxes = [];
 
   for (let i = 0; i < count; i += 1) {
@@ -217,8 +280,8 @@ function drawOverlay(motion, level, boxes = []) {
   }
 
   const pad = 5;
-  const xScale = width / ANALYSIS_WIDTH;
-  const yScale = height / ANALYSIS_HEIGHT;
+  const xScale = width / analysisWidth;
+  const yScale = height / analysisHeight;
 
   boxes.forEach((box, index) => {
     if (box.right < box.left || box.bottom < box.top) {
@@ -267,8 +330,9 @@ function processFrame() {
   }
 
   processing = true;
-  sampleCtx.drawImage(video, 0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
-  const imageData = sampleCtx.getImageData(0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT);
+  sampleCtx.drawImage(video, 0, 0, analysisWidth, analysisHeight);
+  const imageData = sampleCtx.getImageData(0, 0, analysisWidth, analysisHeight);
+  debugCtx.putImageData(imageData, 0, 0);
 
   wasm.HEAPU8.set(imageData.data, framePtr);
   const result = wasm._md_process_rgba(detector);
@@ -336,17 +400,7 @@ async function startCamera() {
   video.srcObject = stream;
   await video.play();
   resizeOverlay();
-
-  detector = wasm._md_create(ANALYSIS_WIDTH, ANALYSIS_HEIGHT, thresholdValue);
-  if (!detector) {
-    throw new Error("Could not create WASM motion detector");
-  }
-
-  framePtr = wasm._md_frame_ptr(detector);
-  frameBytes = wasm._md_frame_bytes(detector);
-  if (!framePtr || frameBytes !== ANALYSIS_WIDTH * ANALYSIS_HEIGHT * 4) {
-    throw new Error("Unexpected WASM frame buffer");
-  }
+  createDetector();
 
   frames = 0;
   running = true;
@@ -395,9 +449,39 @@ function stopCamera() {
 threshold.addEventListener("input", () => {
   thresholdValue = Number(threshold.value);
 
-  if (detector) {
-    wasm._md_set_threshold(detector, thresholdValue);
+  applyDetectorOptions();
+});
+
+resolution.addEventListener("change", () => {
+  setAnalysisResolution(resolution.value);
+
+  if (running) {
+    createDetector();
+    frames = 0;
   }
+});
+
+mergeGap.addEventListener("input", () => {
+  mergeGapValue = Number(mergeGap.value);
+  updateControlLabels();
+  applyDetectorOptions();
+});
+
+minBlob.addEventListener("input", () => {
+  minBlobValue = Number(minBlob.value);
+  updateControlLabels();
+  applyDetectorOptions();
+});
+
+maxBoxes.addEventListener("input", () => {
+  maxBoxesValue = Number(maxBoxes.value);
+  updateControlLabels();
+  applyDetectorOptions();
+});
+
+audioSensitivity.addEventListener("input", () => {
+  audioSensitivityValue = Number(audioSensitivity.value);
+  updateControlLabels();
 });
 
 toggle.addEventListener("click", () => {
@@ -413,6 +497,7 @@ toggle.addEventListener("click", () => {
 });
 
 window.addEventListener("resize", resizeOverlay);
+setAnalysisResolution(resolution.value);
 
 createMotionModule()
   .then((module) => {

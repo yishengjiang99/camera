@@ -15,7 +15,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -120,15 +121,54 @@ dd {
   font-size: 20px;
 }
 
-.threshold {
+.threshold,
+.controls label {
   display: grid;
   gap: 10px;
   color: #d9dde1;
 }
 
-input[type="range"] {
+input[type="range"],
+select {
   width: 100%;
+}
+
+input[type="range"] {
   accent-color: #28c76f;
+}
+
+select {
+  min-height: 36px;
+  color: #f4f1ea;
+  background: #111317;
+  border: 1px solid #3c434b;
+  padding: 0 10px;
+}
+
+output {
+  float: right;
+  color: #65e39b;
+  font-variant-numeric: tabular-nums;
+}
+
+.controls {
+  display: grid;
+  gap: 14px;
+}
+
+.debug {
+  margin: 0;
+  padding: 10px;
+  background: #111317;
+  border: 1px solid #2b3036;
+}
+
+.debug canvas {
+  display: block;
+  width: 100%;
+  image-rendering: pixelated;
+  background: #050607;
+  border: 1px solid #3c434b;
 }
 
 button {

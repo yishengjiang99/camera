@@ -23,6 +23,9 @@ typedef struct MotionDetector {
     float score;
     float level;
     int changed_pixels;
+    int min_blob_size;
+    int merge_gap;
+    int max_boxes;
     int motion_left;
     int motion_top;
     int motion_right;
@@ -145,7 +148,7 @@ static void add_motion_box(MotionDetector *detector,
                            int max_x,
                            int max_y)
 {
-    if (count < 2) {
+    if (count < detector->min_blob_size) {
         return;
     }
 
@@ -154,13 +157,13 @@ static void add_motion_box(MotionDetector *detector,
         --insert_at;
     }
 
-    if (insert_at >= MD_MAX_MOTION_BOXES) {
+    if (insert_at >= detector->max_boxes) {
         return;
     }
 
-    const int last = detector->motion_box_count < MD_MAX_MOTION_BOXES - 1
+    const int last = detector->motion_box_count < detector->max_boxes - 1
                          ? detector->motion_box_count
-                         : MD_MAX_MOTION_BOXES - 1;
+                         : detector->max_boxes - 1;
     for (int i = last; i > insert_at; --i) {
         detector->motion_box_left[i] = detector->motion_box_left[i - 1];
         detector->motion_box_top[i] = detector->motion_box_top[i - 1];
@@ -175,7 +178,7 @@ static void add_motion_box(MotionDetector *detector,
     detector->motion_box_bottom[insert_at] = max_y;
     detector->motion_box_area[insert_at] = count;
 
-    if (detector->motion_box_count < MD_MAX_MOTION_BOXES) {
+    if (detector->motion_box_count < detector->max_boxes) {
         ++detector->motion_box_count;
     }
 
@@ -187,7 +190,7 @@ static void add_motion_box(MotionDetector *detector,
 
 static int boxes_are_close(const MotionDetector *detector, int a, int b)
 {
-    const int merge_gap = 2;
+    const int merge_gap = detector->merge_gap;
 
     return detector->motion_box_left[a] <= detector->motion_box_right[b] + merge_gap &&
            detector->motion_box_right[a] + merge_gap >= detector->motion_box_left[b] &&
@@ -383,6 +386,9 @@ void *md_create(int width, int height, float threshold)
     detector->height = height;
     detector->pixels = width * height;
     detector->threshold = threshold > 0.0f ? threshold : 0.08f;
+    detector->min_blob_size = 2;
+    detector->merge_gap = 2;
+    detector->max_boxes = MD_MAX_MOTION_BOXES;
     detector->scratch_len = csa_block_scratch_len(1, height, width);
 
     detector->rgba =
@@ -498,6 +504,32 @@ void md_set_threshold(void *handle, float threshold)
     if (detector && threshold > 0.0f) {
         detector->threshold = threshold;
     }
+}
+
+WASM_EXPORT
+void md_set_box_options(void *handle, int min_blob_size, int merge_gap, int max_boxes)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    if (!detector) {
+        return;
+    }
+
+    if (min_blob_size < 1) {
+        min_blob_size = 1;
+    }
+    if (merge_gap < 0) {
+        merge_gap = 0;
+    }
+    if (max_boxes < 1) {
+        max_boxes = 1;
+    }
+    if (max_boxes > MD_MAX_MOTION_BOXES) {
+        max_boxes = MD_MAX_MOTION_BOXES;
+    }
+
+    detector->min_blob_size = min_blob_size;
+    detector->merge_gap = merge_gap;
+    detector->max_boxes = max_boxes;
 }
 
 WASM_EXPORT

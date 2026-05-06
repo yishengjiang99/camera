@@ -12,6 +12,8 @@ test("loads WASM and processes fake camera frames", async ({ page }) => {
 
   await expect(page.locator("#status")).toContainText("Ready");
   await expect(page.locator("#toggle")).toBeEnabled();
+  await expect(page.locator("#resolution")).toHaveValue("32x18");
+  await expect(page.locator("#debugFrame")).toBeVisible();
 
   const wasmResponse = await page.request.get("/motion_wasm.wasm");
   expect(wasmResponse.ok()).toBeTruthy();
@@ -22,6 +24,17 @@ test("loads WASM and processes fake camera frames", async ({ page }) => {
   await expect(page.locator("#toggle")).toHaveText("Stop Camera");
   await expect(page.locator("#state")).not.toHaveText("Idle");
   await expect(page.locator("#hum")).toContainText("%");
+
+  await page.locator("#resolution").selectOption("48x27");
+  await expect(page.locator("#resolutionValue")).toContainText("48 x 27");
+  await page.locator("#mergeGap").fill("4");
+  await expect(page.locator("#mergeValue")).toContainText("4");
+  await page.locator("#minBlob").fill("5");
+  await expect(page.locator("#blobValue")).toContainText("5");
+  await page.locator("#maxBoxes").fill("3");
+  await expect(page.locator("#boxesValue")).toContainText("3");
+  await page.locator("#audioSensitivity").fill("1.5");
+  await expect(page.locator("#audioValue")).toContainText("150%");
 
   await expect
     .poll(async () => Number(await page.locator("#frames").textContent()), {

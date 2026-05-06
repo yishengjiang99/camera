@@ -11,6 +11,7 @@ unsigned char *md_frame_ptr(void *handle);
 int md_frame_bytes(void *handle);
 int md_process_rgba(void *handle);
 void md_set_threshold(void *handle, float threshold);
+void md_set_box_options(void *handle, int min_blob_size, int merge_gap, int max_boxes);
 float md_score(void *handle);
 float md_level(void *handle);
 int md_changed_pixels(void *handle);
