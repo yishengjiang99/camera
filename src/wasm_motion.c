@@ -12,6 +12,8 @@
 #define WASM_EXPORT
 #endif
 
+#define MD_MAX_MOTION_BOXES 6
+
 typedef struct MotionDetector {
     int width;
     int height;
@@ -25,6 +27,12 @@ typedef struct MotionDetector {
     int motion_top;
     int motion_right;
     int motion_bottom;
+    int motion_box_count;
+    int motion_box_left[MD_MAX_MOTION_BOXES];
+    int motion_box_top[MD_MAX_MOTION_BOXES];
+    int motion_box_right[MD_MAX_MOTION_BOXES];
+    int motion_box_bottom[MD_MAX_MOTION_BOXES];
+    int motion_box_area[MD_MAX_MOTION_BOXES];
 
     unsigned char *rgba;
     float *input;
@@ -122,6 +130,59 @@ static void clear_motion_bounds(MotionDetector *detector)
     detector->motion_top = 0;
     detector->motion_right = 0;
     detector->motion_bottom = 0;
+    detector->motion_box_count = 0;
+    memset(detector->motion_box_left, 0, sizeof(detector->motion_box_left));
+    memset(detector->motion_box_top, 0, sizeof(detector->motion_box_top));
+    memset(detector->motion_box_right, 0, sizeof(detector->motion_box_right));
+    memset(detector->motion_box_bottom, 0, sizeof(detector->motion_box_bottom));
+    memset(detector->motion_box_area, 0, sizeof(detector->motion_box_area));
+}
+
+static void add_motion_box(MotionDetector *detector,
+                           int count,
+                           int min_x,
+                           int min_y,
+                           int max_x,
+                           int max_y)
+{
+    if (count < 2) {
+        return;
+    }
+
+    int insert_at = detector->motion_box_count;
+    while (insert_at > 0 && count > detector->motion_box_area[insert_at - 1]) {
+        --insert_at;
+    }
+
+    if (insert_at >= MD_MAX_MOTION_BOXES) {
+        return;
+    }
+
+    const int last = detector->motion_box_count < MD_MAX_MOTION_BOXES - 1
+                         ? detector->motion_box_count
+                         : MD_MAX_MOTION_BOXES - 1;
+    for (int i = last; i > insert_at; --i) {
+        detector->motion_box_left[i] = detector->motion_box_left[i - 1];
+        detector->motion_box_top[i] = detector->motion_box_top[i - 1];
+        detector->motion_box_right[i] = detector->motion_box_right[i - 1];
+        detector->motion_box_bottom[i] = detector->motion_box_bottom[i - 1];
+        detector->motion_box_area[i] = detector->motion_box_area[i - 1];
+    }
+
+    detector->motion_box_left[insert_at] = min_x;
+    detector->motion_box_top[insert_at] = min_y;
+    detector->motion_box_right[insert_at] = max_x;
+    detector->motion_box_bottom[insert_at] = max_y;
+    detector->motion_box_area[insert_at] = count;
+
+    if (detector->motion_box_count < MD_MAX_MOTION_BOXES) {
+        ++detector->motion_box_count;
+    }
+
+    detector->motion_left = detector->motion_box_left[0];
+    detector->motion_top = detector->motion_box_top[0];
+    detector->motion_right = detector->motion_box_right[0];
+    detector->motion_bottom = detector->motion_box_bottom[0];
 }
 
 static void update_raw_motion_bounds(MotionDetector *detector)
@@ -144,12 +205,6 @@ static void update_raw_motion_bounds(MotionDetector *detector)
             detector->raw_changed[i] = 1;
         }
     }
-
-    int best_count = 0;
-    int best_min_x = 0;
-    int best_min_y = 0;
-    int best_max_x = 0;
-    int best_max_y = 0;
 
     for (int start = 0; start < pixels; ++start) {
         if (detector->raw_changed[start] != 1) {
@@ -201,20 +256,7 @@ static void update_raw_motion_bounds(MotionDetector *detector)
             }
         }
 
-        if (count > best_count) {
-            best_count = count;
-            best_min_x = min_x;
-            best_min_y = min_y;
-            best_max_x = max_x;
-            best_max_y = max_y;
-        }
-    }
-
-    if (best_count >= 2) {
-        detector->motion_left = best_min_x;
-        detector->motion_top = best_min_y;
-        detector->motion_right = best_max_x;
-        detector->motion_bottom = best_max_y;
+        add_motion_box(detector, count, min_x, min_y, max_x, max_y);
     }
 }
 
@@ -398,4 +440,51 @@ int md_motion_bottom(void *handle)
 {
     MotionDetector *detector = (MotionDetector *)handle;
     return detector ? detector->motion_bottom : 0;
+}
+
+WASM_EXPORT
+int md_motion_box_count(void *handle)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    return detector ? detector->motion_box_count : 0;
+}
+
+WASM_EXPORT
+int md_motion_box_left(void *handle, int index)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    if (!detector || index < 0 || index >= detector->motion_box_count) {
+        return 0;
+    }
+    return detector->motion_box_left[index];
+}
+
+WASM_EXPORT
+int md_motion_box_top(void *handle, int index)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    if (!detector || index < 0 || index >= detector->motion_box_count) {
+        return 0;
+    }
+    return detector->motion_box_top[index];
+}
+
+WASM_EXPORT
+int md_motion_box_right(void *handle, int index)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    if (!detector || index < 0 || index >= detector->motion_box_count) {
+        return 0;
+    }
+    return detector->motion_box_right[index];
+}
+
+WASM_EXPORT
+int md_motion_box_bottom(void *handle, int index)
+{
+    MotionDetector *detector = (MotionDetector *)handle;
+    if (!detector || index < 0 || index >= detector->motion_box_count) {
+        return 0;
+    }
+    return detector->motion_box_bottom[index];
 }

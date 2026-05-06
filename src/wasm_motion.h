@@ -18,6 +18,11 @@ int md_motion_left(void *handle);
 int md_motion_top(void *handle);
 int md_motion_right(void *handle);
 int md_motion_bottom(void *handle);
+int md_motion_box_count(void *handle);
+int md_motion_box_left(void *handle, int index);
+int md_motion_box_top(void *handle, int index);
+int md_motion_box_right(void *handle, int index);
+int md_motion_box_bottom(void *handle, int index);
 
 #ifdef __cplusplus
 }
