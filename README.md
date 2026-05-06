@@ -3,6 +3,12 @@
 This project builds the C convolutional self-attention block into WebAssembly
 and uses it from a browser camera callback for simple motion detection.
 
+## Layout
+
+- `src/`: C sources and headers
+- `web/`: handwritten static web source
+- `build/`: generated binaries, objects, WASM, and deployable static files
+
 ## Build WebAssembly
 
 With Docker Desktop running:

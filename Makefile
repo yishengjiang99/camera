@@ -4,31 +4,34 @@ LDFLAGS ?= -lm
 EMCC ?= emcc
 WASM_EXPORTS := "_md_create","_md_destroy","_md_frame_ptr","_md_frame_bytes","_md_process_rgba","_md_set_threshold","_md_score","_md_level","_md_changed_pixels"
 BUILD_DIR := build
+SRC_DIR := src
+OBJ_DIR := $(BUILD_DIR)/obj
+BIN_DIR := $(BUILD_DIR)/bin
 SITE_DIR := $(BUILD_DIR)/web
 SITE_FILES := $(SITE_DIR)/index.html $(SITE_DIR)/app.js $(SITE_DIR)/style.css
 WASM_JS := $(SITE_DIR)/motion_wasm.js
 
 .PHONY: all clean test example wasm site docker-wasm docker-site
 
-all: csa_example
+all: $(BIN_DIR)/csa_example
 
-csa_example: example.o csa_block.o
-	$(CC) $(CFLAGS) -o $@ example.o csa_block.o $(LDFLAGS)
+$(OBJ_DIR) $(BIN_DIR) $(SITE_DIR):
+	mkdir -p $@
 
-csa_tests: test_csa_block.o csa_block.o
-	$(CC) $(CFLAGS) -o $@ test_csa_block.o csa_block.o $(LDFLAGS)
+$(BIN_DIR)/csa_example: $(OBJ_DIR)/example.o $(OBJ_DIR)/csa_block.o | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $(OBJ_DIR)/example.o $(OBJ_DIR)/csa_block.o $(LDFLAGS)
 
-example.o: example.c csa_block.h
-	$(CC) $(CFLAGS) -c example.c
+$(BIN_DIR)/csa_tests: $(OBJ_DIR)/test_csa_block.o $(OBJ_DIR)/csa_block.o | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $(OBJ_DIR)/test_csa_block.o $(OBJ_DIR)/csa_block.o $(LDFLAGS)
 
-test_csa_block.o: test_csa_block.c csa_block.h
-	$(CC) $(CFLAGS) -c test_csa_block.c
+$(OBJ_DIR)/example.o: $(SRC_DIR)/example.c $(SRC_DIR)/csa_block.h | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $(SRC_DIR)/example.c -o $@
 
-csa_block.o: csa_block.c csa_block.h
-	$(CC) $(CFLAGS) -c csa_block.c
+$(OBJ_DIR)/test_csa_block.o: $(SRC_DIR)/test_csa_block.c $(SRC_DIR)/csa_block.h | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $(SRC_DIR)/test_csa_block.c -o $@
 
-$(SITE_DIR):
-	mkdir -p $(SITE_DIR)
+$(OBJ_DIR)/csa_block.o: $(SRC_DIR)/csa_block.c $(SRC_DIR)/csa_block.h | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $(SRC_DIR)/csa_block.c -o $@
 
 $(SITE_DIR)/index.html: web/index.html | $(SITE_DIR)
 	cp web/index.html $@
@@ -39,8 +42,8 @@ $(SITE_DIR)/app.js: web/app.js | $(SITE_DIR)
 $(SITE_DIR)/style.css: web/style.css | $(SITE_DIR)
 	cp web/style.css $@
 
-$(WASM_JS): csa_block.c csa_block.h wasm_motion.c wasm_motion.h | $(SITE_DIR)
-	$(EMCC) csa_block.c wasm_motion.c -O3 \
+$(WASM_JS): $(SRC_DIR)/csa_block.c $(SRC_DIR)/csa_block.h $(SRC_DIR)/wasm_motion.c $(SRC_DIR)/wasm_motion.h | $(SITE_DIR)
+	$(EMCC) $(SRC_DIR)/csa_block.c $(SRC_DIR)/wasm_motion.c -O3 \
 		-s WASM=1 \
 		-s MODULARIZE=1 \
 		-s EXPORT_ES6=1 \
@@ -50,11 +53,11 @@ $(WASM_JS): csa_block.c csa_block.h wasm_motion.c wasm_motion.h | $(SITE_DIR)
 		-s EXPORTED_RUNTIME_METHODS='["HEAPU8"]' \
 		-o $(WASM_JS)
 
-example: csa_example
-	./csa_example
+example: $(BIN_DIR)/csa_example
+	./$(BIN_DIR)/csa_example
 
-test: csa_tests
-	./csa_tests
+test: $(BIN_DIR)/csa_tests
+	./$(BIN_DIR)/csa_tests
 
 wasm: $(WASM_JS)
 
@@ -68,4 +71,3 @@ docker-site:
 
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -f csa_example csa_tests example.o test_csa_block.o csa_block.o
