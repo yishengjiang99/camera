@@ -28,6 +28,42 @@ let processing = false;
 let frames = 0;
 let thresholdValue = Number(threshold.value);
 
+function cameraSupported() {
+  return Boolean(
+    navigator.mediaDevices?.getUserMedia ||
+      navigator.webkitGetUserMedia ||
+      navigator.mozGetUserMedia ||
+      navigator.msGetUserMedia
+  );
+}
+
+function cameraSupportMessage() {
+  if (!window.isSecureContext) {
+    return "Camera requires HTTPS or localhost. Open the GitHub Pages URL or http://localhost:8080.";
+  }
+
+  return "Camera API is unavailable in this browser. Try Chrome, Edge, Firefox, or Safari.";
+}
+
+function requestCameraStream(constraints) {
+  if (navigator.mediaDevices?.getUserMedia) {
+    return navigator.mediaDevices.getUserMedia(constraints);
+  }
+
+  const legacyGetUserMedia =
+    navigator.webkitGetUserMedia ||
+    navigator.mozGetUserMedia ||
+    navigator.msGetUserMedia;
+
+  if (!legacyGetUserMedia) {
+    return Promise.reject(new Error(cameraSupportMessage()));
+  }
+
+  return new Promise((resolve, reject) => {
+    legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+  });
+}
+
 function setStatus(text) {
   statusEl.textContent = text;
 }
@@ -115,7 +151,11 @@ async function startCamera() {
   toggle.disabled = true;
   setStatus("Requesting camera...");
 
-  stream = await navigator.mediaDevices.getUserMedia({
+  if (!cameraSupported()) {
+    throw new Error(cameraSupportMessage());
+  }
+
+  stream = await requestCameraStream({
     video: {
       facingMode: "environment",
       width: { ideal: 1280 },
@@ -196,6 +236,12 @@ window.addEventListener("resize", resizeOverlay);
 createMotionModule()
   .then((module) => {
     wasm = module;
+    if (!cameraSupported()) {
+      setStatus(cameraSupportMessage());
+      toggle.disabled = true;
+      return;
+    }
+
     setStatus("Ready");
     toggle.disabled = false;
   })
