@@ -44,3 +44,40 @@ test("loads WASM and processes fake camera frames", async ({ page }) => {
   });
   expect(consoleErrors).toEqual([]);
 });
+
+test("falls back to demo stream when camera permission is denied", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:8080",
+    permissions: [],
+  });
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: () => {
+          const error = new Error("Permission denied");
+          error.name = "NotAllowedError";
+          return Promise.reject(error);
+        },
+      },
+    });
+  });
+
+  await page.goto("/");
+  await expect(page.locator("#status")).toContainText("Ready");
+
+  await page.locator("#toggle").click();
+
+  await expect(page.locator("#status")).toContainText("running demo stream");
+  await expect(page.locator("#toggle")).toHaveText("Stop Camera");
+
+  await expect
+    .poll(async () => Number(await page.locator("#frames").textContent()), {
+      message: "demo stream should drive frame processing",
+      timeout: 15000,
+    })
+    .toBeGreaterThan(2);
+
+  await context.close();
+});

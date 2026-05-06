@@ -27,6 +27,10 @@ let running = false;
 let processing = false;
 let frames = 0;
 let thresholdValue = Number(threshold.value);
+let demoCanvas = null;
+let demoCtx = null;
+let demoAnimationId = 0;
+let demoStartTime = 0;
 
 function cameraSupported() {
   return Boolean(
@@ -62,6 +66,53 @@ function requestCameraStream(constraints) {
   return new Promise((resolve, reject) => {
     legacyGetUserMedia.call(navigator, constraints, resolve, reject);
   });
+}
+
+function isPermissionError(error) {
+  return error?.name === "NotAllowedError" || error?.name === "SecurityError";
+}
+
+function drawDemoFrame(time) {
+  if (!demoCanvas || !demoCtx) {
+    return;
+  }
+
+  const seconds = (time - demoStartTime) / 1000;
+  const x = 60 + Math.sin(seconds * 1.8) * 210;
+  const y = 80 + Math.cos(seconds * 1.2) * 80;
+
+  demoCtx.fillStyle = "#12151a";
+  demoCtx.fillRect(0, 0, demoCanvas.width, demoCanvas.height);
+
+  demoCtx.fillStyle = "#253241";
+  for (let i = 0; i < 8; i += 1) {
+    demoCtx.fillRect(i * 80 - ((seconds * 25) % 80), 0, 28, demoCanvas.height);
+  }
+
+  demoCtx.fillStyle = "#65e39b";
+  demoCtx.beginPath();
+  demoCtx.arc(x, y, 42, 0, Math.PI * 2);
+  demoCtx.fill();
+
+  demoCtx.fillStyle = "#f4c542";
+  demoCtx.fillRect(380 - x * 0.45, 190 + Math.sin(seconds * 2.2) * 35, 82, 58);
+
+  demoAnimationId = window.requestAnimationFrame(drawDemoFrame);
+}
+
+function createDemoStream() {
+  demoCanvas = document.createElement("canvas");
+  demoCanvas.width = 640;
+  demoCanvas.height = 360;
+  demoCtx = demoCanvas.getContext("2d");
+  demoStartTime = performance.now();
+
+  if (!demoCanvas.captureStream) {
+    throw new Error("Camera permission was denied, and this browser cannot create a demo video stream.");
+  }
+
+  drawDemoFrame(demoStartTime);
+  return demoCanvas.captureStream(30);
 }
 
 function setStatus(text) {
@@ -155,14 +206,26 @@ async function startCamera() {
     throw new Error(cameraSupportMessage());
   }
 
-  stream = await requestCameraStream({
-    video: {
-      facingMode: "environment",
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-    },
-    audio: false,
-  });
+  let usingDemo = false;
+
+  try {
+    stream = await requestCameraStream({
+      video: {
+        facingMode: "environment",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+  } catch (error) {
+    if (!isPermissionError(error)) {
+      throw error;
+    }
+
+    usingDemo = true;
+    stream = createDemoStream();
+    demoAnimationId = window.requestAnimationFrame(drawDemoFrame);
+  }
 
   video.srcObject = stream;
   await video.play();
@@ -183,7 +246,8 @@ async function startCamera() {
   running = true;
   toggle.textContent = "Stop Camera";
   toggle.disabled = false;
-  setStatus("Monitoring");
+  setStatus(usingDemo ? "Permission denied; running demo stream" : "Monitoring");
+
   scheduleFrame();
 }
 
@@ -202,6 +266,13 @@ function stopCamera() {
     }
     stream = null;
   }
+
+  if (demoAnimationId) {
+    window.cancelAnimationFrame(demoAnimationId);
+    demoAnimationId = 0;
+  }
+  demoCanvas = null;
+  demoCtx = null;
 
   video.srcObject = null;
   document.body.classList.remove("motion");
