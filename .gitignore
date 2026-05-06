@@ -2,5 +2,7 @@ csa_example
 csa_tests
 *.o
 build/
+playwright-report/
+test-results/
 .DS_Store
 node_modules

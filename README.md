@@ -61,3 +61,12 @@ URL for the hosted demo.
 ```sh
 make test
 ```
+
+## End-to-End Tests
+
+```sh
+npm run test:e2e
+```
+
+The Playwright test launches Chromium with a fake camera device, loads the
+static site, starts the detector, and waits for WASM frame processing.
