@@ -30,7 +30,10 @@ typedef struct MotionDetector {
     float *input;
     float *features;
     float *previous;
+    float *previous_input;
     float *scratch;
+    unsigned char *raw_changed;
+    int *component_queue;
     size_t scratch_len;
 
     float *dw5x5_weight;
@@ -51,7 +54,10 @@ static void free_detector(MotionDetector *detector)
     free(detector->input);
     free(detector->features);
     free(detector->previous);
+    free(detector->previous_input);
     free(detector->scratch);
+    free(detector->raw_changed);
+    free(detector->component_queue);
     free(detector->dw5x5_weight);
     free(detector->pw_c_to_hw_weight);
     free(detector->pw_hw_to_c_weight);
@@ -98,6 +104,120 @@ static int init_weights(MotionDetector *detector)
     return 1;
 }
 
+static float raw_motion_threshold(const MotionDetector *detector)
+{
+    float threshold = detector->threshold * 0.55f;
+    if (threshold < 0.025f) {
+        threshold = 0.025f;
+    }
+    if (threshold > 0.12f) {
+        threshold = 0.12f;
+    }
+    return threshold;
+}
+
+static void clear_motion_bounds(MotionDetector *detector)
+{
+    detector->motion_left = 0;
+    detector->motion_top = 0;
+    detector->motion_right = 0;
+    detector->motion_bottom = 0;
+}
+
+static void update_raw_motion_bounds(MotionDetector *detector)
+{
+    const int width = detector->width;
+    const int height = detector->height;
+    const int pixels = detector->pixels;
+    const float threshold = raw_motion_threshold(detector);
+
+    memset(detector->raw_changed, 0, (size_t)pixels * sizeof(*detector->raw_changed));
+    clear_motion_bounds(detector);
+
+    for (int i = 0; i < pixels; ++i) {
+        float diff = detector->input[i] - detector->previous_input[i];
+        if (diff < 0.0f) {
+            diff = -diff;
+        }
+
+        if (diff > threshold) {
+            detector->raw_changed[i] = 1;
+        }
+    }
+
+    int best_count = 0;
+    int best_min_x = 0;
+    int best_min_y = 0;
+    int best_max_x = 0;
+    int best_max_y = 0;
+
+    for (int start = 0; start < pixels; ++start) {
+        if (detector->raw_changed[start] != 1) {
+            continue;
+        }
+
+        int head = 0;
+        int tail = 0;
+        int count = 0;
+        int min_x = start % width;
+        int min_y = start / width;
+        int max_x = min_x;
+        int max_y = min_y;
+
+        detector->raw_changed[start] = 2;
+        detector->component_queue[tail++] = start;
+
+        while (head < tail) {
+            const int idx = detector->component_queue[head++];
+            const int x = idx % width;
+            const int y = idx / width;
+            const int neighbors[4] = {
+                x > 0 ? idx - 1 : -1,
+                x + 1 < width ? idx + 1 : -1,
+                y > 0 ? idx - width : -1,
+                y + 1 < height ? idx + width : -1,
+            };
+
+            ++count;
+            if (x < min_x) {
+                min_x = x;
+            }
+            if (y < min_y) {
+                min_y = y;
+            }
+            if (x > max_x) {
+                max_x = x;
+            }
+            if (y > max_y) {
+                max_y = y;
+            }
+
+            for (int n = 0; n < 4; ++n) {
+                const int next = neighbors[n];
+                if (next >= 0 && detector->raw_changed[next] == 1) {
+                    detector->raw_changed[next] = 2;
+                    detector->component_queue[tail++] = next;
+                }
+            }
+        }
+
+        if (count > best_count) {
+            best_count = count;
+            best_min_x = min_x;
+            best_min_y = min_y;
+            best_max_x = max_x;
+            best_max_y = max_y;
+        }
+    }
+
+    if (best_count >= 2) {
+        detector->motion_left = best_min_x;
+        detector->motion_top = best_min_y;
+        detector->motion_right = best_max_x;
+        detector->motion_bottom = best_max_y;
+    }
+}
+
 WASM_EXPORT
 void *md_create(int width, int height, float threshold)
 {
@@ -121,10 +241,16 @@ void *md_create(int width, int height, float threshold)
     detector->input = (float *)calloc((size_t)detector->pixels, sizeof(float));
     detector->features = (float *)calloc((size_t)detector->pixels, sizeof(float));
     detector->previous = (float *)calloc((size_t)detector->pixels, sizeof(float));
+    detector->previous_input = (float *)calloc((size_t)detector->pixels, sizeof(float));
     detector->scratch = (float *)calloc(detector->scratch_len, sizeof(float));
+    detector->raw_changed =
+        (unsigned char *)calloc((size_t)detector->pixels, sizeof(unsigned char));
+    detector->component_queue = (int *)calloc((size_t)detector->pixels, sizeof(int));
 
     if (!detector->rgba || !detector->input || !detector->features ||
-        !detector->previous || !detector->scratch || !init_weights(detector)) {
+        !detector->previous || !detector->previous_input || !detector->scratch ||
+        !detector->raw_changed || !detector->component_queue ||
+        !init_weights(detector)) {
         free_detector(detector);
         return NULL;
     }
@@ -180,23 +306,20 @@ int md_process_rgba(void *handle)
     if (!detector->has_previous) {
         memcpy(detector->previous, detector->features,
                (size_t)detector->pixels * sizeof(float));
+        memcpy(detector->previous_input, detector->input,
+               (size_t)detector->pixels * sizeof(float));
         detector->has_previous = 1;
         detector->score = 0.0f;
         detector->level = 0.0f;
         detector->changed_pixels = 0;
-        detector->motion_left = 0;
-        detector->motion_top = 0;
-        detector->motion_right = 0;
-        detector->motion_bottom = 0;
+        clear_motion_bounds(detector);
         return 0;
     }
 
+    update_raw_motion_bounds(detector);
+
     float sum = 0.0f;
     int changed = 0;
-    int min_x = detector->width;
-    int min_y = detector->height;
-    int max_x = -1;
-    int max_y = -1;
     for (int i = 0; i < detector->pixels; ++i) {
         float diff = detector->features[i] - detector->previous[i];
         if (diff < 0.0f) {
@@ -205,35 +328,16 @@ int md_process_rgba(void *handle)
 
         sum += diff;
         if (diff > detector->threshold) {
-            const int x = i % detector->width;
-            const int y = i / detector->width;
-
-            if (x < min_x) {
-                min_x = x;
-            }
-            if (y < min_y) {
-                min_y = y;
-            }
-            if (x > max_x) {
-                max_x = x;
-            }
-            if (y > max_y) {
-                max_y = y;
-            }
-
             ++changed;
         }
 
         detector->previous[i] = detector->features[i];
+        detector->previous_input[i] = detector->input[i];
     }
 
     detector->score = sum / (float)detector->pixels;
     detector->changed_pixels = changed;
     detector->level = (float)changed / (float)detector->pixels;
-    detector->motion_left = changed > 0 ? min_x : 0;
-    detector->motion_top = changed > 0 ? min_y : 0;
-    detector->motion_right = changed > 0 ? max_x : 0;
-    detector->motion_bottom = changed > 0 ? max_y : 0;
 
     return changed > detector->pixels / 25 ? 1 : 0;
 }

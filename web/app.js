@@ -209,7 +209,7 @@ function drawOverlay(motion, level, box = null) {
     return;
   }
 
-  const pad = 12;
+  const pad = 5;
   const xScale = width / ANALYSIS_WIDTH;
   const yScale = height / ANALYSIS_HEIGHT;
   const x = Math.max(0, box.left * xScale - pad);
